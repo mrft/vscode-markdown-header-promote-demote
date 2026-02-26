@@ -4,6 +4,11 @@
   "description": "Promote and demote markdown headers while preserving the relative structure of subsections.",
   "version": "0.1.0",
   "publisher": "mrft",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mrft/vscode-markdown-header-promote-demote.git"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
