@@ -53,6 +53,41 @@ export function deactivate(): void {}
 /* ------------------------------------------------------------------ */
 
 /**
+ * Collect the line numbers of all actual markdown headers by querying the
+ * VS Code document-symbol provider.  Because the provider understands
+ * document structure, `#` characters inside fenced code blocks are
+ * excluded automatically.
+ *
+ * Returns `undefined` when the provider is unavailable (callers should
+ * then fall back to regex-based detection).
+ */
+async function getHeaderLineNumbers(
+  document: vscode.TextDocument
+): Promise<Set<number> | undefined> {
+  const symbols = await vscode.commands.executeCommand<
+    vscode.DocumentSymbol[] | undefined
+  >('vscode.executeDocumentSymbolProvider', document.uri);
+
+  if (!symbols) {
+    return undefined;
+  }
+
+  const lines = new Set<number>();
+
+  function collect(list: vscode.DocumentSymbol[]): void {
+    for (const sym of list) {
+      lines.add(sym.range.start.line);
+      if (sym.children.length > 0) {
+        collect(sym.children);
+      }
+    }
+  }
+
+  collect(symbols);
+  return lines;
+}
+
+/**
  * Adjust every markdown header in the affected range by `delta` levels.
  *
  * `delta = -1` → promote (## → #)
@@ -76,6 +111,17 @@ async function adjustHeaders(
   const document = editor.document;
   const selection = editor.selection;
 
+  // Use the document-symbol provider to identify real header lines.
+  // This prevents incorrectly treating `#` inside code blocks as headers.
+  // Falls back to regex when the provider is unavailable.
+  const headerLines = await getHeaderLineNumbers(document);
+  const isHeader = (lineIndex: number): boolean => {
+    if (headerLines !== undefined) {
+      return headerLines.has(lineIndex);
+    }
+    return /^#{1,6}\s/.test(document.lineAt(lineIndex).text);
+  };
+
   // Determine which lines to process.
   let startLine: number;
   let endLine: number;
@@ -93,8 +139,7 @@ async function adjustHeaders(
 
     // If the first selected line is not a header, fall back to the
     // default Tab / Shift+Tab behaviour (indent / outdent).
-    const firstLineText = document.lineAt(startLine).text;
-    if (!/^#{1,6}\s/.test(firstLineText)) {
+    if (!isHeader(startLine)) {
       await vscode.commands.executeCommand(
         delta > 0 ? 'editor.action.indentLines' : 'editor.action.outdentLines'
       );
@@ -103,7 +148,7 @@ async function adjustHeaders(
   } else {
     // --- No selection: operate on the section rooted at the cursor ---
     const cursorLine = selection.active.line;
-    const range = getSectionRange(document, cursorLine);
+    const range = getSectionRange(document, cursorLine, isHeader);
     if (!range) {
       // Cursor is not on a header line — nothing to do.
       return;
@@ -113,7 +158,7 @@ async function adjustHeaders(
   }
 
   // Validate that the operation will not produce invalid levels.
-  if (!canAdjust(document, startLine, endLine, delta)) {
+  if (!canAdjust(document, startLine, endLine, isHeader, delta)) {
     vscode.window.showWarningMessage(
       delta < 0
         ? 'Cannot promote: one or more headers are already at level 1 (#).'
@@ -125,6 +170,9 @@ async function adjustHeaders(
   // Apply the edit.
   await editor.edit((editBuilder) => {
     for (let i = startLine; i <= endLine; i++) {
+      if (!isHeader(i)) {
+        continue;
+      }
       const line = document.lineAt(i);
       const headerMatch = line.text.match(/^(#{1,6})\s/);
       if (!headerMatch) {
@@ -141,7 +189,7 @@ async function adjustHeaders(
   // Optionally renumber all headers across the entire document.
   const config = vscode.workspace.getConfiguration('markdownStructure');
   if (config.get<boolean>('updateNumbering', true)) {
-    await renumberHeaders(editor);
+    await renumberHeaders(editor, headerLines);
   }
 }
 
@@ -154,11 +202,18 @@ async function adjustHeaders(
  * rooted at `cursorLine`.
  *
  * If `cursorLine` is not a header, returns `undefined`.
+ *
+ * `isHeader` is a predicate that returns true only for lines that are actual
+ * markdown headers (not `#` characters inside code blocks).
  */
 function getSectionRange(
   document: vscode.TextDocument,
-  cursorLine: number
+  cursorLine: number,
+  isHeader: (lineIndex: number) => boolean
 ): { start: number; end: number } | undefined {
+  if (!isHeader(cursorLine)) {
+    return undefined;
+  }
   const headerMatch = document.lineAt(cursorLine).text.match(/^(#{1,6})\s/);
   if (!headerMatch) {
     return undefined;
@@ -167,10 +222,12 @@ function getSectionRange(
 
   let endLine = cursorLine;
   for (let i = cursorLine + 1; i < document.lineCount; i++) {
-    const m = document.lineAt(i).text.match(/^(#{1,6})\s/);
-    if (m && m[1].length <= rootLevel) {
-      // We've hit a sibling or higher-level header — stop.
-      break;
+    if (isHeader(i)) {
+      const m = document.lineAt(i).text.match(/^(#{1,6})\s/);
+      if (m && m[1].length <= rootLevel) {
+        // We've hit a sibling or higher-level header — stop.
+        break;
+      }
     }
     endLine = i;
   }
@@ -179,14 +236,21 @@ function getSectionRange(
 
 /**
  * Check whether every header in the range can be safely shifted by `delta`.
+ *
+ * `isHeader` is a predicate that returns true only for lines that are actual
+ * markdown headers (not `#` characters inside code blocks).
  */
 function canAdjust(
   document: vscode.TextDocument,
   startLine: number,
   endLine: number,
+  isHeader: (lineIndex: number) => boolean,
   delta: number
 ): boolean {
   for (let i = startLine; i <= endLine; i++) {
+    if (!isHeader(i)) {
+      continue;
+    }
     const m = document.lineAt(i).text.match(/^(#{1,6})\s/);
     if (m) {
       const newLevel = m[1].length + delta;
@@ -222,9 +286,24 @@ const HEADER_RE = /^(#{1,6})\s+(?:(\d+(?:\.\d+)*)\s+)?(.*)$/;
  * Only headers that *already* have a numeric prefix are updated — plain
  * headers without a number are left untouched (they don't participate in
  * the counter, but they don't reset it either).
+ *
+ * `headerLines` is the set of line numbers that are actual markdown headers,
+ * as identified by the document-symbol provider.  When provided it prevents
+ * treating `#` characters inside code blocks as headers.  When omitted the
+ * function falls back to regex-based detection.
  */
-async function renumberHeaders(editor: vscode.TextEditor): Promise<void> {
+async function renumberHeaders(
+  editor: vscode.TextEditor,
+  headerLines?: Set<number>
+): Promise<void> {
   const document = editor.document;
+
+  const isRealHeader = (lineIndex: number): boolean => {
+    if (headerLines !== undefined) {
+      return headerLines.has(lineIndex);
+    }
+    return HEADER_RE.test(document.lineAt(lineIndex).text);
+  };
 
   // First pass: collect info about every header.
   interface HeaderInfo {
@@ -236,6 +315,9 @@ async function renumberHeaders(editor: vscode.TextEditor): Promise<void> {
 
   const headers: HeaderInfo[] = [];
   for (let i = 0; i < document.lineCount; i++) {
+    if (!isRealHeader(i)) {
+      continue;
+    }
     const text = document.lineAt(i).text;
     const m = text.match(HEADER_RE);
     if (!m) {
