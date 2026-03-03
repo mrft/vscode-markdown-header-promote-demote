@@ -163,7 +163,10 @@ async function adjustHeaders(
     const cursorLine = selection.active.line;
     const range = getSectionRange(document, cursorLine, isHeader);
     if (!range) {
-      // Cursor is not on a header line — nothing to do.
+      // Cursor is not on a header line — fall back to the default Tab / Shift+Tab behaviour (indent / outdent).
+      await vscode.commands.executeCommand(
+        delta > 0 ? 'editor.action.indentLines' : 'editor.action.outdentLines'
+      );
       return;
     }
     startLine = range.start;
