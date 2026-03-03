@@ -2,7 +2,7 @@
 
 A VS Code extension that lets you **promote** and **demote** markdown headers while preserving the relative structure of all sub-sections.
 
-**TODO**: use document structure instead of regexes as in https://github.com/fake-monkey/adjust-heading-level/blob/main/src/utils.ts
+It now uses document structure instead of regexes to find headers, inspired by [adjust-heading-level](https://github.com/fake-monkey/adjust-heading-level/blob/main/src/utils.ts). This makes it more robust and allows it to handle edge cases like headers inside code blocks or lists.
 
 ## Features
 
@@ -17,7 +17,7 @@ A VS Code extension that lets you **promote** and **demote** markdown headers wh
 
 When your cursor is on a header line *without* a selection, **the entire section** (the header and every sub-header beneath it, up to the next sibling or higher-level header) is promoted or demoted together.  The relative depth of sub-sections is kept intact.
 
-```
+```markdown
 ## Chapter 1          →  ### Chapter 1
 ### Section 1.1       →  #### Section 1.1
 #### Detail           →  ##### Detail
@@ -33,7 +33,7 @@ If you **select** a region of text first, only the headers inside that selection
 
 If your headers use numeric prefixes (e.g. `1.1`, `1.2.3`), the extension automatically recalculates **all** numbered prefixes across the entire document after every promote/demote operation.  This keeps numbers consistent even for headers outside the selected block.
 
-```
+```markdown
 Before (demote "1.2 Advantages"):
 
 # 1 Introduction
@@ -52,6 +52,12 @@ After:
 ```
 
 This behaviour can be turned off in settings (see below).
+
+If you need a literal number in a header that shouldn't be updated, you can add an empty comment `<!-- -->` before the number.
+
+```markdown
+## <!-- -->1 Country, 2 Languages   ← this '1' will not be updated by the auto-numbering
+```
 
 ### Safety
 

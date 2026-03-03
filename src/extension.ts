@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
 
+import { version } from '../package.json';
+
+
+// Create output channel at module level so all functions can access it
+let output: vscode.OutputChannel;
+
 /**
  * Activate the extension — register promote and demote commands.
  */
@@ -44,12 +50,19 @@ export function activate(context: vscode.ExtensionContext): void {
       (editor) => adjustHeaders(editor, 1)
     )
   );
+
+
+  output = vscode.window.createOutputChannel('Markdown Structure');
+  context.subscriptions.push(output);
+
+  output.appendLine(`Activated version ${version}`);
+  // output.show(); // opens the Output panel and selects this channel
 }
 
 export function deactivate(): void {}
 
 /* ------------------------------------------------------------------ */
-/*  Core logic                                                         */
+/*  Core logic                                                        */
 /* ------------------------------------------------------------------ */
 
 /**

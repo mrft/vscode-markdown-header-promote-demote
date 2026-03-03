@@ -2,7 +2,7 @@
   "name": "markdown-header-promote-demote",
   "displayName": "Markdown Header Promote/Demote",
   "description": "Promote and demote markdown headers while preserving the relative structure of subsections.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "mrft",
   "engines": {
     "vscode": "^1.75.0"
