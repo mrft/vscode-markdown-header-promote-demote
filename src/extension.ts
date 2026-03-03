@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { version } from '../package.json';
+import { version, displayName } from '../package.json';
 
 
 // Create output channel at module level so all functions can access it
@@ -51,8 +51,8 @@ export function activate(context: vscode.ExtensionContext): void {
     )
   );
 
-
-  output = vscode.window.createOutputChannel('Markdown Structure');
+  // create an output channel for logging (optional, can be used for debugging)
+  output = vscode.window.createOutputChannel(displayName);
   context.subscriptions.push(output);
 
   output.appendLine(`Activated version ${version}`);
