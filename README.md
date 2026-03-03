@@ -4,6 +4,10 @@ A VS Code extension that lets you **promote** and **demote** markdown headers wh
 
 It now uses document structure instead of regexes to find headers, inspired by [adjust-heading-level](https://github.com/fake-monkey/adjust-heading-level/blob/main/src/utils.ts). This makes it more robust and allows it to handle edge cases like headers inside code blocks or lists.
 
+## Demo
+
+<img src="./markdown-header-promote-demote.gif" alt="Markdown Header Promote/Demote Demo"  width="800"/>
+
 ## Features
 
 | Action      | Keybinding  | Effect                                    |
@@ -12,6 +16,7 @@ It now uses document structure instead of regexes to find headers, inspired by [
 | **Promote** | `Shift+Tab` | Decrease header level (e.g. `###` → `##`) |
 
 > **Note:** These keybindings only activate when the cursor is on a markdown header line (`# ...`).  Normal `Tab` indentation works everywhere else.
+
 
 ### Structure-preserving
 
