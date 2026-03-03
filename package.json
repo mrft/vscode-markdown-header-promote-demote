@@ -5,6 +5,7 @@
   "version": "0.1.2",
   "publisher": "mrft",
   "repository": {
+    "type": "git",
     "url": "https://github.com/mrft/vscode-markdown-header-promote-demote.git"
   },
   "engines": {
